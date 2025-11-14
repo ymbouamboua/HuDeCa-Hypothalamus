@@ -1,1 +1,135 @@
+---
+title: "10x hudeca hypothalamus: 001 integration"
+author: "Mbouamboua Yvon <yvon.mbouamboua@inserm.fr>"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+date: '`r format(Sys.Date())`'
+---
+
+# Goal
+Batch correction and dataset integration
+
+# Setup
+```r
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, comment = "")
+dir.main <- "/Users/yvon.mbouamboua/Documents/projects/singlecell/hudeca_hypothalamus"
+dir.results <- file.path(dir.main, "output", "001_integration")
+dir.create(dir.results, showWarnings = FALSE, recursive = TRUE)
+
+packages <- c(
+  "Seurat", "ggplot2", "dplyr"
+)
+
+install_and_load <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    if (!requireNamespace("BiocManager", quietly = TRUE))
+      install.packages("BiocManager")
+    BiocManager::install(pkg, ask = FALSE)
+  }
+  suppressWarnings(suppressMessages(library(pkg, character.only = TRUE)))
+}
+
+suppressPackageStartupMessages({
+  invisible(lapply(packages, install_and_load))
+})
+
+# Create Seurat objects
+
+data.dir   <- file.path(dir.main, "data/processed")
+sample.names <- c("FH.S124", "FH.S5678")
+h5.file    <- "filtered_feature_bc_matrix.h5"
+sample.dirs <- file.path(data.dir, sample.names)
+output.dir <- file.path(dir.results, "data/seurat")
+
+seurat.list <- create_seurat(
+  dirs = sample.dirs,
+  names = sample.names,
+  h5file = h5.file,
+  species = "auto",
+  cluster = FALSE,
+  merge = FALSE,
+  remove_ambient = TRUE,
+  save.plot = TRUE,
+  save = TRUE,
+  verbose = TRUE,
+  outdir = output.dir
+)
+
+# Add Demuxafy metadata
+seurat.path <- list.files(
+  path = file.path(dir.results, "data/seurat"),
+  pattern = "\\.rds$",
+  full.names = TRUE
+)
+
+seurat.list <- load_seurat_list(files = seurat.path)
+
+demux.files <- file.path(
+  dir.main, "data/processed/demuxafy",
+  c("FH.S124", "FH.S5678"),
+  "combine_majoritySinglet/combined_results_w_combined_assignments.tsv"
+)
+
+obj <- add_demux(seurat.list, demux.files, merge.out = TRUE)
+obj <- JoinLayers(obj)
+seurat.list <- SplitObject(object = obj, split.by = "donor")
+rm(obj)
+
+# Quality control
+obj <- run_qc(
+  x = seurat.list, min_feat = 1000, min_umi = 500,
+  mad_n = 3, max_mito = 1, calc_ribo = FALSE,
+  calc_drop = TRUE, max_drop = 0.98,
+  method = "MAD", sample_col = "donor",
+  outdir = "QC", merge_output = TRUE
+)
+obj <- JoinLayers(obj)
+obj <- filter_genes(x = obj, cell_filter = FALSE)
+
+# Integration (rPCA workflow)
+
+obj.list <- SplitObject(obj, split.by = "donor")
+obj.list <- lapply(obj.list, \(x) NormalizeData(x) |> FindVariableFeatures())
+features <- SelectIntegrationFeatures(object.list = obj.list)
+
+obj.list <- lapply(obj.list, \(x) {
+  x <- ScaleData(x, features = features)
+  x <- RunPCA(x, features = features)
+})
+
+anchors <- FindIntegrationAnchors(
+  object.list = obj.list,
+  dims = 1:30,
+  anchor.features = features,
+  reduction = "rpca"
+)
+
+obj <- IntegrateData(anchorset = anchors, dims = 1:30)
+
+obj <- FindVariableFeatures(obj, assay = "RNA", nfeatures = 2000)
+features <- VariableFeatures(obj, assay = "RNA")
+
+DefaultAssay(obj) <- "integrated"
+obj <- ScaleData(obj)
+obj <- RunPCA(obj, npcs = 30, features = features)
+obj <- RunUMAP(obj, reduction = "pca", dims = 1:30, min.dist = 0.5)
+obj <- FindNeighbors(obj, dims = 1:30)
+obj <- FindClusters(obj, resolution = 0.7)
+obj <- JoinLayers(obj)
+
+DefaultAssay(obj) <- "RNA"
+saveRDS(obj, file.path(dir.results, "data/FH_integrated.rds"))
+
+# Cluster plot
+DimPlot(obj, group.by "seurat_clusters")
+
+# Marker detection
+markers <- FindAllMarkers(obj, group.by = "seurat_clusters", only.pos = T)
+write.table(markers,file.path(dir.results, "data/seurat_markers.tsv"), sep = "\t", row.names = FALSE, quote = F)
+
+# Save data 
+saveRDS(obj, file.path(dir.results, "data/FH_integrated.rds"))
 
