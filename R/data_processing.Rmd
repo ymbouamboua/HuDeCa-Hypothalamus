@@ -35,7 +35,9 @@ install_and_load <- function(pkg) {
 suppressPackageStartupMessages({
   invisible(lapply(packages, install_and_load))
 })
+```
 
+```r
 # Create Seurat objects
 
 data.dir   <- file.path(dir.main, "data/processed")
@@ -57,8 +59,11 @@ seurat.list <- create_seurat(
   verbose = TRUE,
   outdir = output.dir
 )
+```
 
 # Add Demuxafy metadata
+
+```r
 seurat.path <- list.files(
   path = file.path(dir.results, "data/seurat"),
   pattern = "\\.rds$",
@@ -77,8 +82,11 @@ obj <- add_demux(seurat.list, demux.files, merge.out = TRUE)
 obj <- JoinLayers(obj)
 seurat.list <- SplitObject(object = obj, split.by = "donor")
 rm(obj)
+```
 
 # Quality control
+
+```r
 obj <- run_qc(
   x = seurat.list, min_feat = 1000, min_umi = 500,
   mad_n = 3, max_mito = 1, calc_ribo = FALSE,
@@ -88,9 +96,11 @@ obj <- run_qc(
 )
 obj <- JoinLayers(obj)
 obj <- filter_genes(x = obj, cell_filter = FALSE)
+```
 
 # Integration (rPCA workflow)
 
+```r
 obj.list <- SplitObject(obj, split.by = "donor")
 obj.list <- lapply(obj.list, \(x) NormalizeData(x) |> FindVariableFeatures())
 features <- SelectIntegrationFeatures(object.list = obj.list)
@@ -122,14 +132,25 @@ obj <- JoinLayers(obj)
 
 DefaultAssay(obj) <- "RNA"
 saveRDS(obj, file.path(dir.results, "data/FH_integrated.rds"))
+```
 
 # Cluster plot
+
+```r
 DimPlot(obj, group.by "seurat_clusters")
+```
 
 # Marker detection
+
+```r
 markers <- FindAllMarkers(obj, group.by = "seurat_clusters", only.pos = T)
 write.table(markers,file.path(dir.results, "data/seurat_markers.tsv"), sep = "\t", row.names = FALSE, quote = F)
+```
 
 # Save data 
+
+```r
 saveRDS(obj, file.path(dir.results, "data/FH_integrated.rds"))
+```
+
 
