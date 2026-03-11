@@ -1,0 +1,198 @@
+---
+title: "10X-HUDECA-HYPO : PREPROCESSING"
+author: "Yvon Mbouamboua <yvon.mbouamboua@inserm.fr>"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+date: '`r format(Sys.Date())`'
+---
+
+## Goal
+
+Filtering, normalization, and integration.
+
+## Setup
+
+```{r setup, message=FALSE, warning=FALSE}
+
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+root <- '/Users/yvon.mbouamboua/projects/singlecell/10x-hudeca-hypo'
+outdir <- file.path(root, 'output', 'preprocessing')
+if (!dir.exists(outdir)) dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+shared_root <- normalizePath('~/projects/cellverse/R', winslash = '/', mustWork = FALSE)
+load_r <- function(d) {
+  if (dir.exists(d)) {
+    fs <- sort(list.files(d, '\\.R$', full.names = TRUE))
+    invisible(lapply(fs, sys.source, envir = .GlobalEnv))
+  }
+}
+load_r(file.path(shared_root, 'helper'))
+import_dir <- file.path(shared_root, 'import')
+pkg <- file.path(import_dir, 'packages.R')
+if (file.exists(pkg)) sys.source(pkg, envir = .GlobalEnv)
+load_r(import_dir)
+
+```
+
+# Create seurat objects
+
+```{r}
+
+#samples <- c("FH_S124", "FH_S5678", "XIN_ZHOU_2023")
+samples <- c("FH_S124", "FH_S5678")
+
+objs <- load_seurat(
+  sample.dirs = samples,
+  parent.dir = file.path(root, "data"),
+  use.filtered = TRUE,
+  merge = FALSE
+)
+
+```
+
+# Clean duplicated cell barcodes in each seurat object
+
+```{r}
+
+cell1 <- colnames(objs$FH_S124)
+cell2 <- colnames(objs$FH_S5678)
+dup <- intersect(cell1, cell2)
+length(dup)
+#intersect(colnames(obj), dup) # no duplicated cell in final cleanned integrated data
+
+objs <- clean_seurat_barcodes(objs, mode = "both", save = F)
+log  <- objs$log
+objs <- objs$objects
+
+```
+
+
+# Remove duplicated cells in each demuxafy result
+
+```{r}
+
+for (s in c("FH_S124", "FH_S5678")) {
+  f <- file.path(root, "data/WS_demuxafy", s,
+                 "combine_majoritySinglet/combined_results_w_combined_assignments.tsv")
+  df <- read.delim(f)
+  df <- df[!df$Barcode %in% dup, ]
+  write.table(df, sub(".tsv$", "_clean.tsv", f),
+              sep = "\t", row.names = FALSE, quote = FALSE)
+}
+
+```
+
+
+# Add demuxafy
+
+```{r}
+
+FH_S124 <- add_bulk_mapping_to_seurat(
+  object = objs$FH_S124, 
+  remove_doublets = F,
+  combined_tsv = file.path(root, "analysis/FH_S124_bulk_mapping/combined_results_with_bulk_mapping.tsv")
+)
+
+FH_S124@meta.data
+
+FH_S5678 <- add_bulk_mapping_to_seurat(
+  object = objs$FH_S5678, 
+  remove_doublets = F,
+  combined_tsv = file.path(root, "analysis/FH_S5678_bulk_mapping/combined_results_with_bulk_mapping.tsv")
+)
+
+raw <- get_merge(obj.list = list(FH_S124, FH_S5678))
+saveRDS(raw, file.path(outdir, "data/raw.rds"))
+
+```
+
+# Quality control
+
+```{r}
+
+Idents(raw) <- "BulkSample"
+raw <- subset(raw, idents = "unassigned", invert = T)
+unique(raw$BulkSample)
+s.list <- split_seurat(raw, split.by = "BulkSample")
+rm(raw,FH_S124,FH_S5678)
+invisible(gc())
+
+obj <- run_qc(x = s.list, min_feat = 1000, min_umi = 500, method = "MAD", mad_n = 5,  max_mito = 5,
+                      species = "human", sample_col = "BulkSample", rm_dbl = F,
+                      merge = F, outdir = file.path(outdir, "data"))
+
+rm(s.list)
+invisible(gc())
+
+```
+
+
+# Seurat rPCA integration
+
+```{r}
+
+# Normalize + HVGs (per sample)
+
+obj <- lapply(obj, function(x) {
+  x <- NormalizeData(x, normalization.method = "LogNormalize", scale.factor = 1e4)
+  x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+  x
+})
+
+# Select integration features
+features <- SelectIntegrationFeatures(object.list = obj, nfeatures = 3000)
+
+# Scale + PCA
+obj <- lapply(obj, function(x) {
+  x <- ScaleData(x, features = features, verbose = FALSE)
+  x <- RunPCA(x, features = features, npcs = 50, verbose = FALSE)
+  x
+})
+
+# Find anchors (RPCA = BEST for development)
+anchors <- FindIntegrationAnchors(object.list = obj,anchor.features = features,reduction = "rpca", dims = 1:30)
+
+# Integrated data
+obj <- IntegrateData(anchorset = anchors,dims = 1:30)
+
+rm(anchors)
+invisible(gc())
+
+# Post-integration
+DefaultAssay(obj) <- "integrated"
+obj <- ScaleData(obj, verbose = FALSE)
+obj <- RunPCA(obj, npcs = 30, verbose = FALSE)
+obj <- RunUMAP(obj, reduction = "pca", dims = 1:30, n.neighbors = 40, min.dist = 0.5, spread = 1.2, metric = "cosine",seed.use = 123)
+obj <- FindNeighbors(obj, dims = 1:30)
+obj <- FindClusters(obj, resolution = 0.6)
+DefaultAssay(obj) <- "RNA"
+obj <- JoinLayers(obj)
+saveRDS(obj, file.path(outdir, "data/fh.rds"))
+cellmap(obj)
+
+```
+
+
+```{r fig.width=8, fig.height=7}
+
+# sce <- as.SingleCellExperiment(obj)
+# zellkonverter::writeH5AD(sce, file = file.path(outdir, "data/fh.h5ad"), X_name = "counts")
+
+```
+
+```{r fig.width=8, fig.height=8}
+
+cellvio(obj, group.by = "seurat_clusters", features = c("nFeature_RNA", "nCount_RNA","percent_mito"), stack = T, show.pval = F, pt.size = 0.1)
+cellvio(obj, group.by = "BulkSample", features = c("nFeature_RNA", "nCount_RNA","percent_mito"), stack = T, pt.size = 0.1)
+
+```
+
+## Session info
+
+```{r}
+
+sessionInfo()
+
+```
