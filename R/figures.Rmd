@@ -33,7 +33,7 @@ if (file.exists(pkg)) sys.source(pkg, envir = .GlobalEnv)
 load_r(import_dir)
 
 ```
-
+All functions used in this analysis can be found here: https://github.com/ymbouamboua/HuDeCa/blob/main/R/000-functions.R.
 
 # Load data
 
