@@ -1,0 +1,557 @@
+---
+title: "10X-HUDECA-HYPO : ANNOTATION"
+author: "Yvon Mbouamboua <yvon.mbouamboua@inserm.fr>"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+date: '`r format(Sys.Date())`'
+---
+
+## Goal
+
+Data analysis.
+
+## Setup
+
+```{r setup, message=FALSE, warning=FALSE}
+
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+root <- '/Users/yvon.mbouamboua/projects/singlecell/10x-hudeca-hypo'
+outdir <- file.path(root, 'output', 'annotation')
+if (!dir.exists(outdir)) dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+shared_root <- normalizePath('~/projects/cellverse/R', winslash = '/', mustWork = FALSE)
+load_r <- function(d) {
+  if (dir.exists(d)) {
+    fs <- sort(list.files(d, '\\.R$', full.names = TRUE))
+    invisible(lapply(fs, sys.source, envir = .GlobalEnv))
+  }
+}
+load_r(file.path(shared_root, 'helper'))
+import_dir <- file.path(shared_root, 'import')
+pkg <- file.path(import_dir, 'packages.R')
+if (file.exists(pkg)) sys.source(pkg, envir = .GlobalEnv)
+load_r(import_dir)
+
+```
+
+# Load integrated data
+
+```{r fig.width=8, fig.height=6}
+
+obj = readRDS(file.path(root, "output/preprocessing/data/fh.rds"))
+cellmap(obj, group.by = "seurat_clusters", label = T, label.size = 5, legend = F)
+
+```
+
+
+# Cluster gene markers
+
+```{r fig.width=8, fig.height=18}
+
+DefaultAssay(obj) = "RNA"
+sub <- genefilter(obj)
+markers <- cellmarker(sub,  group.by = "seurat_clusters", only.pos = T, max.cells.per.ident = 1000, min.pct = 0.1)
+rm(sub)
+write.table(markers, file.path(outdir, "data/seurat_markers.tsv"), sep = "\t", row.names = F, quote = F)
+obj@misc$seurat_markers <- markers
+markers <- read.delim(file.path(outdir, "data/seurat_markers.tsv"))
+top <- markers %>% group_by(cluster) %>% top_n(n = 3, wt = avg_log2FC)
+#View(top)
+celldot(obj, features = rev(top$gene), flip = T, group.by = "seurat_clusters", txtsize = 10) 
+
+```
+
+
+# Split cluster 8
+
+```{r}
+
+Idents(obj) = "seurat_clusters"
+obj = FindSubCluster(obj, cluster = 8, graph.name = "integrated_snn", resolution = 0.1)
+# Idents(obj) = "C8"
+# obj = FindSubCluster(obj, cluster = 23, graph.name = "integrated_snn", resolution = 0.2)
+cellmap(obj, group.by = "sub.cluster", label = T)
+
+```
+
+
+
+```{r}
+
+markers <- c(
+  "HMGA2", "HES1","VIM","ARHGAP28", # NE
+  "NES", # NP
+  "POMC", # ARC
+  "AQP4", "AGRP", "ALDH1L1", "AGT", # Astro
+  "GAD1",     # GABA
+  "SLC17A6",  # GLUT
+  "POMC",     # POMC
+  "KISS1",    # KISS1
+  "SOX2",     # RGC
+  "RAX",      # Tanycytes
+  "FOXJ1",    # Ependymocytes
+  "GFAP",     # Astrocytes
+  "OLIG1",    # OPC
+  "MBP",      # Oligodendrocytes
+  "VWF",      # Endothelial
+  "BMP5",     # VLMC
+  "PDGFRB",   # Pericytes
+  "PTPRC"     # Microglia
+)
+
+cellfeat(obj,features = markers, ncol = 5, axes = FALSE, merge.leg = TRUE)
+cellvio(obj,features = markers, group.by = "seurat_clusters", stack = T)
+celldot(obj,features = markers, group.by = "seurat_clusters", txtsize = 8)
+cellvio(obj, features = c("SIM1","OTP","NES","PDGFRA","OLIG1","MBP","MOG"), stack = T)
+cellfeat(obj, features = c("PTPRC","VWF","PDGFRB","BMP5","POMC"))
+cellfeat(obj, features = c("MUC16","TUBB3","COL23A1"))
+
+celldot(obj,features = c("FOXJ1","TPPP3","PIFO","DNAH5","DYNC2H1","PCDH7"),
+        group.by = "seurat_clusters", txtsize = 8) # Ependy
+
+celldot(obj,features = c("PLLP","PDGFRA", "MBP","BCAS1"), group.by = "seurat_clusters", txtsize = 8, style = "bw") # OLigo
+
+celldot(obj,features = c("RAX","NR2F1","NR2F2","FABP7","SLC1A3", "VIM","SOX2","S100B","AQP4","SLCO1C1","DIO2","DIO3","FBLN1","CRYM","GPR50"),
+        group.by = "seurat_clusters", txtsize = 8, style = "bw") # Tanycytes
+  
+celldot(obj, group.by = "seurat_clusters", features = c("POMC", "GH1", "PRL", "TSHB", "LHB", "FSHB")) # Pituitary
+celldot(obj, group.by = "seurat_clusters", features = c("PTPRC","VWF","PDGFRB","BMP5","STMN2","ELAVL3","COL27A1", "ACAN","RSPO1","RSPO2", "WNT3A"),style = "bw", txtsize = 8)
+celldot(obj, group.by = "seurat_clusters", features = c("SOX2","SOX9","VIM","NES","FABP7","HES1","HES5","ID1","ID2","ID3"), 
+        txtsize = 8) # RGC
+
+cellvio(obj, features = c("AQP4","AGT","RAX","SHH","NPY","AGRP"), stack = T, group.by = "sub.cluster", pt.size = 0.1)
+
+```
+
+
+
+
+```{r  fig.width=10, fig.height=8}
+
+# Progenitors / Glia lineage
+markers_NEP <- c("SOX2","OTX2","VIM","NES","HES1","HMGA2","CDH2","NOTCH1")
+markers_RGC <- c("SOX2","VIM","NES","FABP7","GLI3","PAX6","HES5","SLC1A3")
+markers_tRGC <- c("VIM","FABP7","SOX2","HOPX","TNC","LGALS3","ID3","COL27A1")
+#markers_TSC <- c("RAX","VIM","NES","COL23A1","FGF10","CRYM","LHX2")
+markers_WNTRGC <- c("RSPO1","RSPO2","WNT3A","AXIN2","LEF1","LGR4","FZD7","SOX2")
+markers_Epend <- c("FOXJ1","TPPP","PIFO","DNAH9","CFAP44","S100B","RFX3")
+
+# Neuronal lineage
+markers_NB <- c("DCX","TUBB3","NEUROD1","ASCL1","DLL3","SOX4","SOX11")
+markers_tNB <- c("DCX","TUBB3","NEUROD2","STMN2","ELAVL4","ISL1")
+markers_NKX6_2_NB <- c("NKX6-2","DCX","TUBB3","NEUROD1","ASCL1","OLIG2")
+markers_NKX6_2_NB_ARC <- c("NKX6-2","RAX","NR5A1","DCX","OTP","SOX14")
+markers_ARC <- c("RAX","OTP","NR5A1","POMC","GHRH","NPY","AGRP")
+markers_PVN <- c("OTP","SIM1","POU3F2","OTX2","OXT","AVP","CRH")
+markers_VMH <- c("NR5A1","FEZF1","NKX2-1","FOXD1","TAC1","ESR1")
+
+hypo_markers <- list(
+  NEP = markers_NEP,
+  RGC = markers_RGC,
+  tRGC = markers_tRGC,
+  TSC = markers_TSC,
+  WNT_RGC = markers_WNTRGC,
+  Epend = markers_Epend,
+  NB = markers_NB,
+  tNB = markers_tNB,
+  NKX6_2_NB = markers_NKX6_2_NB,
+  NKX6_2_NB_ARC = markers_NKX6_2_NB_ARC,
+  NKX6_2_NB_VMH = markers_NKX6_2_NB_VMH,
+  ARC = markers_ARC,
+  PVN = markers_PVN,
+  VMH = markers_VMH
+)
+
+cellfeat(obj, features = markers_VMH, axes = F)
+celldot(obj, features = markers_VMH, group.by = "seurat_clusters")
+cellfeat(obj, features = markers_PVN, axes = F)
+celldot(obj, features = markers_PVN, group.by = "seurat_clusters")
+cellfeat(obj, features = markers_ARC, axes = F)
+celldot(obj, features = markers_ARC, group.by = "seurat_clusters")
+
+cellfeat(obj, features = markers_TSC, axes = F)
+celldot(obj, features = markers_TSC, group.by = "seurat_clusters")
+
+TSC = c("CCND2","HMGA2","HES1","SHH","GPC3","MEST","SLIT2","DBX1","WNT8B",
+        "FOXB1","DKK2","NKX2-4","ETNA5","BARHL1") # Harmony et al
+cellfeat(obj, features = TSC, axes = F)
+celldot(obj, features = TSC, group.by = "seurat_clusters", txtsize = 8)
+
+cellfeat(obj, features = markers_NKX6_2_NB, axes = F)
+celldot(obj, features = markers_NKX6_2_NB, group.by = "seurat_clusters")
+
+cellfeat(obj, features = markers_NKX6_2_NB_ARC, axes = F)
+celldot(obj, features = markers_NKX6_2_NB_ARC, group.by = "seurat_clusters")
+
+cellfeat(obj, features = markers_NEP, axes = F)
+celldot(obj, features = markers_NEP, group.by = "seurat_clusters")
+
+celldot(obj, features = markers_WNTRGC, group.by = "seurat_clusters")
+
+celldot(obj, features = "GAD2", style = "bw")
+cellfeat(obj, features = c("GAD1","SLC32A1","SLC17A6"))
+
+
+```
+
+
+# Human fetal hypothalamus marker genes
+
+```{r fig.width=16, fig.height=10}
+
+hypo_markers <- list(
+  ## Neural progenitors / radial glia
+  progenitors = c("SOX2", "NES", "VIM", "HES1", "HES5","PAX6", "FABP7", "MKI67", "TOP2A"),
+  ## Intermediate progenitors / neurogenic
+  intermediate = c("ASCL1", "NEUROG2", "NEUROD1","DLL1", "HES6", "TBR2"),
+  ## Early neurons (pan-neuronal)
+  neurons_early = c("DCX", "STMN2", "TUBB3", "MAP2","ELAVL3", "ELAVL4"),
+  ## Glutamatergic neurons
+  glutamatergic = c("SLC17A6", "SLC17A7","VGLUT2", "TBR1", "NEUROD6"),
+  ## GABAergic neurons
+  gabaergic = c("GAD1", "GAD2", "SLC32A1","DLX1", "DLX2", "DLX5", "DLX6"),
+  ## Hypothalamic neuropeptides (core identity)
+  neuropeptides = c("POMC", "NPY", "AGRP", "CARTPT","OXT", "AVP", "CRH", "TRH","GHRH", "SST", "TAC1", "TAC3"),
+  ## Arcuate nucleus (ARC)
+  arcuate = c("POMC", "AGRP", "NPY","LEPR", "MC4R", "KISS1"),
+  ## Ventromedial hypothalamus (VMH)
+  vmh = c("NR5A1", "TBX3", "RORA","ESR1", "FEZF1"),
+  ## Paraventricular nucleus (PVN)
+  pvn = c("SIM1", "OTP", "CRH","AVP", "OXT", "PDYN"),
+  ## Lateral hypothalamus (LH)
+  lh = c("HCRT", "PMCH", "GAL","NRGN"),
+  ## Astrocytes
+  astrocytes = c("GFAP", "AQP4", "SLC1A3","ALDH1L1", "SOX9"),
+  ## Tanycytes
+  tanycytes = c("RAX","NR2F1","NR2F2","FABP7","SLC1A3", "VIM","SOX2","S100B","AQP4","SLCO1C1","DIO2","DIO3","FBLN1","CRYM","GPR50"),
+  ## Oligodendrocyte lineage
+  oligodendrocytes = c("OLIG1", "OLIG2", "SOX10","PDGFRA", "MBP"),
+  ## Microglia (present early in fetal brain)
+  microglia = c("CX3CR1", "P2RY12","AIF1", "TYROBP", "LST1")
+)
+
+celldot(obj, group.by = "seurat_clusters", features = c(hypo_markers$glutamatergic, hypo_markers$gabaergic,"TBX3","SIM1", "OTP"), style = "bw")
+celldot(obj, group.by = "seurat_clusters", features = c(hypo_markers$vmh), style = "bw")
+celldot(obj, group.by = "seurat_clusters", features = unlist(hypo_markers), style = "bw")
+celldot(obj, group.by = "seurat_clusters", features = c(hypo_markers$glutamatergic, hypo_markers$gabaergic), style = "bw")
+cellfeat(obj, features = c("TBX3","POMC","AGRP","KISS1","NPY"))
+cellfeat(obj, c("SLC32A1","SLC17A6","TBR1"))
+
+```
+
+
+
+
+## ann1
+
+```{r}
+
+ann1_map <- list(RGC = c(4,11,18,34), 
+                 Ependymal = c(15),
+                 TSC = c(8), 
+                 IPC = c(13), 
+                 Myogenic = c(32),
+                 Neuron = c(2,5,10,3,6,9,1,16,0,12,14,17,25,20,33,35,27,31,26,21),
+  Oligodendrocyte = c(23), 
+  NCC = c(28),
+  Pituitary = c(19), 
+  Vascular = c(22), 
+  Mesenchyme = c(7,24,30,24),
+  Immune  = c(29)
+  )
+
+obj$ann1 <- NA_character_
+map1 <- make_cluster_map(ann1_map)
+obj@meta.data$ann1 <- map1[as.character(obj$seurat_clusters)]
+
+Idents(obj) = "sub.cluster"
+tany <- WhichCells(obj, idents = "8_3")
+obj$ann1[tany] <- "Tanycyte"
+tany <- WhichCells(obj, idents = "8_1")
+obj$ann1[tany] <- "Astrocyte"
+
+
+ann1_order <- c(
+  "RGC", "TSC", "IPC",
+  "Ependymal", "Tanycyte", "Astrocyte", "Oligodendrocyte",
+  "Neuron",
+  "Myogenic", "NCC", "Mesenchyme", "Vascular", "Immune","Pituitary"
+)
+
+obj$ann1 <- factor(obj$ann1, levels = ann1_order)
+
+cellmap(obj, group.by = "ann1", label = T)
+
+```
+
+
+# ann2
+
+```{r}
+
+ann2_map <- list(RGC = c(4,11,18,34), 
+                 Ependy = c(15),
+                 TSC = c(8), 
+                 IPC = c(13), 
+                 Myog = c(32), 
+                 Cartl = c(24), # ACAN, COL27A1
+                 GLUT = c(2,5,10,21,26),
+                 GABA = c(3,6,9,16,0,25,20,33,35,27,14),
+                 ARC = c(1),
+                 PVN = c(31),
+                 VMH = c(12,17),
+                 Oligo = c(23),
+                 NCC = c(28),
+                 Pit = c(19), 
+                 VLMC = c(7,24), 
+                 Peri = c(30), 
+                 EC = c(22),
+                 MG  = c(29)
+)
+
+obj$ann2 <- NA_character_
+map2 <- make_cluster_map(ann2_map)
+obj@meta.data$ann2 <- map2[as.character(obj$seurat_clusters)]
+
+Idents(obj) = "sub.cluster"
+tany <- WhichCells(obj, idents = "8_3")
+obj$ann2[tany] <- "Tany"
+tany <- WhichCells(obj, idents = "8_1")
+obj$ann2[tany] <- "Astro"
+
+obj$ann2 <- factor(obj$ann2, levels = ann2_order)
+cellmap(obj, group.by = "ann2", label = T)
+
+```
+
+
+```{r}
+cellfeat(obj, features = c("TBX3","KISS1","POMC"), theme.cols = "magma")
+```
+
+
+# ann3
+
+```{r fig.width=10, fig.height=6}
+
+
+ann3_map <- list(RGC1 = c(4), 
+                 RGC2 = c(18), 
+                 tRGC = c(11), # transitional RGC
+                 dRGC = (34), # PAX7, CDH19 # dorsal hypo RGC
+                 Ependy = c(15),
+                 TSC = c(8), 
+                 IPC = c(13), 
+                 Myog = c(32), 
+                 Cartl = c(24), # "ACAN", "COL27A1", "SOX9"
+                 TBR1 = c(2,5,10),
+                 RNF220 = c(21),
+                 ERBB4 = c(9),
+                 TBX20 = c(35),
+                 VWC2L = c(0),
+                 SYT10 = c(6),
+                 SLC5A7 = c(14),
+                 RELN = c(20),
+                 GBX1 = c(16),
+                 STRIP2 = c(3),
+                 SIM1 = c(31),
+                 TTC6 = c(27,33),
+                 OTX2 = c(25),
+                 ONECUT2 = c(17),
+                 `NKX2-1` = c(12), # "NR5A1","FEZF1","NKX2-1"
+                 PITX2 = (26),
+                 iNeuron = c(1),
+                 OPC = c(23), 
+                 NCC = c(28),
+                 Pit = c(19), # "POMC", "GH1", "PRL", "TSHB", "LHB", "FSHB"
+                 VLMC = c(7,24), # BMP5
+                 Peri = c(30), # PDGFRB
+                 EC = c(22), # VWF
+                 MG  = c(29)
+)
+
+obj$ann3 <- NA_character_
+map3 <- make_cluster_map(ann3_map)
+obj@meta.data$ann3 <- map3[as.character(obj$seurat_clusters)]
+
+Idents(obj) = "sub.cluster"
+tany <- WhichCells(obj, idents = "8_3")
+obj$ann3[tany] <- "Tany" # RAX, FGF10
+tany <- WhichCells(obj, idents = "8_1")
+obj$ann3[tany] <- "Astro" # AGT, AQP4
+
+#cellvio(obj, c("MOG","MBP","BCAS1","PDGFRA","OLIG1"), group.by = "sub.cluster", stack = T, pt.size = 0.1)
+#cellvio(obj, c("TBX3","PITX2","SIM1","OTX2","NKX2-1"), group.by = "seurat_clusters", stack = T, pt.size = 0.1)
+#celldot(obj, c("MOG","MBP","BCAS1","PDGFRA","OLIG1"), group.by = "sub.cluster", style = "bw", txtsize = 8)
+#hista <- cellpick(obj, clusters = c(0), cluster.col = "seurat_clusters", pos.genes =  c("HDC"), expr.thresh = 0.1) # histaminergic
+tbx3 <- cellpick(obj, clusters = c(1), cluster.col = "seurat_clusters", pos.genes =  c("TBX3","PITX2","SIM1","OTX2","NKX2-1"), expr.thresh = 1.5)
+kiss1 <- cellpick(obj, clusters = c(1), cluster.col = "seurat_clusters", pos.genes =  c("KISS1"), expr.thresh = 1)
+agrp <- cellpick(obj, clusters = c(1), cluster.col = "seurat_clusters", pos.genes =  c("AGRP"), expr.thresh = 1)
+pomc <- cellpick(obj, clusters = c(1), cluster.col = "seurat_clusters", pos.genes =  c("POMC"), expr.thresh = 2)
+npy <- cellpick(obj, clusters = c(6,9), cluster.col = "seurat_clusters", pos.genes =  c("NPY"), expr.thresh = 2) 
+ol = cellpick(obj, clusters = c(23), cluster.col = "seurat_clusters", pos.genes = c("MOG","MBP","BCAS1"), expr.thresh = 2)
+
+obj$ann3[tbx3] = "TBX3"
+obj$ann3[kiss1] = "KISS1"
+obj$ann3[agrp] = "AGRP"
+obj$ann3[npy] = "NPY"
+obj$ann3[pomc] = "POMC"
+obj$ann3[ol] = "OL"
+
+
+# Developmentally ordered annotation including your specific neurons
+ann3_order <- c(
+  # Radial glia / progenitors
+  "RGC1", "RGC2", "tRGC", "dRGC", "IPC",
+
+  # Early neurons / general
+  "TBR1","RNF220","ERBB4","TBX20","VWC2L","SYT10","SLC5A7",
+  "RELN","GBX1","STRIP2","SIM1","TTC6","OTX2","ONECUT2",
+  "NKX2-1","PITX2","iNeuron","TBX3",
+
+  # Hypothalamic neuron subclasses
+  "KISS1", "AGRP", "NPY", "POMC",
+
+  # Glial lineage
+  "TSC","Ependy","Tany","Astro","OPC","OL",
+
+  # Specialized non-neural / mesenchyme
+  "Myog","Cartl","NCC","VLMC","Peri","EC","MG",
+
+  # Pituitary
+  "Pit"
+)
+
+# Apply as factor
+obj$ann3 <- factor(obj$ann3, levels = ann3_order)
+
+
+cellmap(obj, group.by = "ann3", label = T, pt.size = 0.5)
+
+```
+
+## Neurons
+
+```{r fig.width=6, fig.height=10}
+
+sub = get_subset(sobj = obj, group.by = "ann1", idents = "Neuron")
+cellmap(sub, group.by = "ann3")
+sub <- genefilter(sub)
+markers <- cellmarker(sub,  group.by = "ann3", only.pos = T, logfc.threshold = 0.25, min.pct = 0.25)
+write.table(markers, file.path(outdir, "data/neuron_markers.tsv"), sep = "\t", row.names = F, quote = F)
+obj@misc$neuron_markers <- markers
+markers <- read.delim(file.path(outdir, "data/neuron_markers.tsv"))
+top <- markers %>% group_by(cluster) %>% top_n(n = 3, wt = avg_log2FC)
+p = celldot(sub, features = rev(top$gene), flip = T, group.by = "ann3", txtsize = 10, x.ang = 45, title = "Neurons", th.cols = "RdYlBu", rev.th.cols = T) 
+p
+savefig(p, filename = file.path(outdir, "plots/neuron_markers"),  width = 6, height = 10, format = "png")
+
+```
+
+
+
+
+# Add metadata
+
+```{r}
+
+obj@meta.data <- obj@meta.data %>%
+  dplyr::mutate(
+    sample = case_when(
+      BulkSample == "S1-PCW7" ~ "S1",
+      BulkSample == "S2-PCW8" ~ "S2",
+      BulkSample == "S5-PCW10" ~ "S5",
+      BulkSample == "S4-PCW10.5" ~ "S4",
+      BulkSample == "S6-PCW12" ~ "S6",
+      BulkSample == "S7-PCW12" ~ "S7",
+      BulkSample == "S8-PCW12" ~ "S8"
+    ),
+    status = case_when(
+      BulkSample == "S1-PCW7" ~ "S1-PCW7-N",
+      BulkSample == "S2-PCW8" ~ "S2-PCW8-N",
+      BulkSample == "S5-PCW10" ~ "S5-PCW10-N",
+      BulkSample == "S4-PCW10.5" ~ "S4-PCW10.5-O",
+      BulkSample == "S6-PCW12" ~ "S6-PCW12-O",
+      BulkSample == "S7-PCW12" ~ "S7-PCW12-N",
+      BulkSample == "S8-PCW12" ~ "S8-PCW12-N"
+    ),
+    stage = case_when(
+      BulkSample %in% c("S1-PCW7") ~ "PCW7",
+      BulkSample %in% c("S2-PCW8") ~ "PCW8",
+      BulkSample %in% c("S5-PCW10","S4-PCW10.5") ~ "PCW10",
+      BulkSample %in% c("S6-PCW12","S7-PCW12","S8-PCW12") ~ "PCW12"
+    ),
+    bmi = case_when(
+      BulkSample == "S1-PCW7" ~ "N7",
+      BulkSample == "S2-PCW8" ~ "N8",
+      BulkSample == "S5-PCW10" ~ "N10",
+      BulkSample == "S4-PCW10.5" ~ "O10.5",
+      BulkSample == "S6-PCW12" ~ "O12",
+      BulkSample %in% c("S7-PCW12","S8-PCW12") ~ "N12"
+    ),
+    group = case_when(
+      BulkSample %in% c("S1-PCW7","S2-PCW8") ~ "N7-8",
+      BulkSample %in% c("S5-PCW10","S7-PCW12","S8-PCW12") ~ "N10-12",
+      BulkSample %in% c("S4-PCW10.5","S6-PCW12") ~ "O10-12"
+    ),
+    cond = case_when(
+      BulkSample %in% c("S1-PCW7","S2-PCW8","S5-PCW10","S7-PCW12","S8-PCW12") ~ "N",
+      BulkSample %in% c("S4-PCW10.5","S6-PCW12") ~ "O"
+    ),
+    sex = case_when(
+      BulkSample %in% c("S1-PCW7","S4-PCW10.5","S6-PCW12","S8-PCW12") ~ "M",
+      BulkSample %in% c("S2-PCW8","S5-PCW10","S7-PCW12") ~ "F"
+    )
+  ) %>%
+  dplyr::mutate(
+    sample = factor(sample, levels = c("S1","S2","S5","S4","S6","S7","S8")),
+    status = factor(status, levels = c("S1-PCW7-N","S2-PCW8-N","S5-PCW10-N","S4-PCW10.5-O","S6-PCW12-O","S7-PCW12-N","S8-PCW12-N")),
+    stage  = factor(stage, levels = c("PCW7","PCW8","PCW10","PCW12")),
+    bmi    = factor(bmi, levels = c("N7","N8","N10","O10.5","O12","N12")),
+    group  = factor(group, levels = c("N7-8","N10-12","O10-12")),
+    cond   = factor(cond, levels = c("N","O")),
+    sex    = factor(sex, levels = c("M","F"))
+  )
+
+cellmap(object = obj, group.by = "sex")
+cellmap(object = obj, group.by = "stage")
+cellmap(object = obj, group.by = "group")
+cellmap(object = obj, group.by = "bmi")
+cellmap(object = obj, group.by = "cond")
+cellmap(object = obj, group.by = "status")
+
+
+```
+
+
+
+```{r fig.width=8, fig.height=3}
+
+cellprop(data = obj, x = "ann3", y = "sample", stack = T, prop = T, x.ang = 45)
+cellprop(data = obj, x = "ann3", y = "group", stack = T, prop = T, x.ang = 45)
+cellprop(data = obj, x = "ann3", y = "cond", stack = T, prop = T, x.ang = 45)
+
+```
+
+
+
+
+# Save data
+
+```{r fig.width=14, fig.height=18}
+
+saveRDS(obj, file.path(outdir, "data/fh.rds"))
+
+```
+
+
+
+## Session info
+
+```{r}
+
+sessionInfo()
+
+```
