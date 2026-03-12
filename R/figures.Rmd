@@ -33,7 +33,7 @@ if (file.exists(pkg)) sys.source(pkg, envir = .GlobalEnv)
 load_r(import_dir)
 
 ```
-All functions used in this analysis can be found here: https://github.com/ymbouamboua/HuDeCa/blob/main/R/000-functions.R.
+
 
 # Load data
 
@@ -49,7 +49,7 @@ pal <- readRDS(file.path(root, "analysis/hudeca_hypo_colors.rds"))
 
 ```{r}
 
-raw <- readRDS("~/projects/singlecell/000-hudeca-hypo/out/000-qc/data/raw.rds")
+raw <- readRDS("~/projects/singlecell/10x-hudeca-hypo/output/preprocessing/data/raw.rds")
 raw = get_subset(raw, group.by = "BulkSample", idents = "unassigned", invert=T)
 unique(raw$BulkSample)
 raw$percent_mito <- PercentageFeatureSet(raw, pattern = "^MT-")
@@ -59,20 +59,20 @@ raw@meta.data <- raw@meta.data %>%
     sample = case_when(
       BulkSample == "S1-PCW7" ~ "S1",
       BulkSample == "S2-PCW8" ~ "S2",
-      BulkSample == "S5-PCW10" ~ "S5",
+      BulkSample == "S5-PCW10" ~ "S3",
       BulkSample == "S4-PCW10.5" ~ "S4",
-      BulkSample == "S6-PCW12" ~ "S6",
-      BulkSample == "S7-PCW12" ~ "S7",
-      BulkSample == "S8-PCW12" ~ "S8"
+      BulkSample == "S6-PCW12" ~ "S5",
+      BulkSample == "S7-PCW12" ~ "S6",
+      BulkSample == "S8-PCW12" ~ "S7"
     ),
     status = case_when(
-      BulkSample == "S1-PCW7" ~ "S1-PCW7-N",
-      BulkSample == "S2-PCW8" ~ "S2-PCW8-N",
-      BulkSample == "S5-PCW10" ~ "S5-PCW10-N",
-      BulkSample == "S4-PCW10.5" ~ "S4-PCW10.5-O",
-      BulkSample == "S6-PCW12" ~ "S6-PCW12-O",
-      BulkSample == "S7-PCW12" ~ "S7-PCW12-N",
-      BulkSample == "S8-PCW12" ~ "S8-PCW12-N"
+      BulkSample == "S1-PCW7" ~ "S1-PCW7-LD",
+      BulkSample == "S2-PCW8" ~ "S2-PCW8-LD",
+      BulkSample == "S5-PCW10" ~ "S3-PCW10-LD",
+      BulkSample == "S4-PCW10.5" ~ "S4-PCW10.5-OD",
+      BulkSample == "S6-PCW12" ~ "S5-PCW12-OD",
+      BulkSample == "S7-PCW12" ~ "S6-PCW12-LD",
+      BulkSample == "S8-PCW12" ~ "S7-PCW12-LD"
     ),
     stage = case_when(
       BulkSample %in% c("S1-PCW7") ~ "PCW7",
@@ -81,21 +81,21 @@ raw@meta.data <- raw@meta.data %>%
       BulkSample %in% c("S6-PCW12","S7-PCW12","S8-PCW12") ~ "PCW12"
     ),
     bmi = case_when(
-      BulkSample == "S1-PCW7" ~ "N7",
-      BulkSample == "S2-PCW8" ~ "N8",
-      BulkSample == "S5-PCW10" ~ "N10",
-      BulkSample == "S4-PCW10.5" ~ "O10.5",
-      BulkSample == "S6-PCW12" ~ "O12",
-      BulkSample %in% c("S7-PCW12","S8-PCW12") ~ "N12"
+      BulkSample == "S1-PCW7" ~ "LD7",
+      BulkSample == "S2-PCW8" ~ "LD8",
+      BulkSample == "S5-PCW10" ~ "LD10",
+      BulkSample == "S4-PCW10.5" ~ "OD10.5",
+      BulkSample == "S6-PCW12" ~ "OD12",
+      BulkSample %in% c("S7-PCW12","S8-PCW12") ~ "LD12"
     ),
     group = case_when(
-      BulkSample %in% c("S1-PCW7","S2-PCW8") ~ "N7-8",
-      BulkSample %in% c("S5-PCW10","S7-PCW12","S8-PCW12") ~ "N10-12",
-      BulkSample %in% c("S4-PCW10.5","S6-PCW12") ~ "O10-12"
+      BulkSample %in% c("S1-PCW7","S2-PCW8") ~ "LD7-8",
+      BulkSample %in% c("S5-PCW10","S7-PCW12","S8-PCW12") ~ "LD10-12",
+      BulkSample %in% c("S4-PCW10.5","S6-PCW12") ~ "OD10-12"
     ),
     cond = case_when(
-      BulkSample %in% c("S1-PCW7","S2-PCW8","S5-PCW10","S7-PCW12","S8-PCW12") ~ "N",
-      BulkSample %in% c("S4-PCW10.5","S6-PCW12") ~ "O"
+      BulkSample %in% c("S1-PCW7","S2-PCW8","S5-PCW10","S7-PCW12","S8-PCW12") ~ "LD",
+      BulkSample %in% c("S4-PCW10.5","S6-PCW12") ~ "OD"
     ),
     sex = case_when(
       BulkSample %in% c("S1-PCW7","S4-PCW10.5","S6-PCW12","S8-PCW12") ~ "M",
@@ -103,14 +103,15 @@ raw@meta.data <- raw@meta.data %>%
     )
   ) %>%
   dplyr::mutate(
-    sample = factor(sample, levels = c("S1","S2","S5","S4","S6","S7","S8")),
-    status = factor(status, levels = c("S1-PCW7-N","S2-PCW8-N","S5-PCW10-N","S4-PCW10.5-O","S6-PCW12-O","S7-PCW12-N","S8-PCW12-N")),
+    sample = factor(sample, levels = c("S1","S2","S3","S4","S5","S6","S7")),
+    status = factor(status, levels = c("S1-PCW7-LD","S2-PCW8-LD","S3-PCW10-LD","S4-PCW10.5-OD","S5-PCW12-OD","S6-PCW12-LD","S7-PCW12-LD")),
     stage  = factor(stage, levels = c("PCW7","PCW8","PCW10","PCW12")),
-    bmi    = factor(bmi, levels = c("N7","N8","N10","O10.5","O12","N12")),
-    group  = factor(group, levels = c("N7-8","N10-12","O10-12")),
-    cond   = factor(cond, levels = c("N","O")),
+    bmi    = factor(bmi, levels = c("LD7","LD8","LD10","OD10.5","OD12","LD12")),
+    group  = factor(group, levels = c("LD7-8","LD10-12","OD10-12")),
+    cond   = factor(cond, levels = c("LD","OD")),
     sex    = factor(sex, levels = c("M","F"))
   )
+
 
 ```
 
@@ -132,8 +133,22 @@ savefig(fig = p, filename = file.path(outdir, "plots/cellvio_qc_filt"),  width =
 
 ```{r}
 
-QC_summary <- read_csv("projects/singlecell/000-hudeca-hypo/out/000-qc/data/QC_summary.csv")
+QC_summary <- read_csv("~/projects/singlecell/10x-hudeca-hypo/output/preprocessing/data/QC_summary.csv")
 
+QC_summary <- QC_summary %>%
+  dplyr::mutate(
+    status = case_when(
+      Sample == "S1-PCW7" ~ "S1-PCW7-LD",
+      Sample == "S2-PCW8" ~ "S2-PCW8-LD",
+      Sample == "S5-PCW10" ~ "S3-PCW10-LD",
+      Sample == "S4-PCW10.5" ~ "S4-PCW10.5-OD",
+      Sample == "S6-PCW12" ~ "S5-PCW12-OD",
+      Sample == "S7-PCW12" ~ "S6-PCW12-LD",
+      Sample == "S8-PCW12" ~ "S7-PCW12-LD"
+    )
+  )
+    
+    
 qc_long <- QC_summary |>
   pivot_longer(
     c(Pre_Cells, Post_Cells),
@@ -145,7 +160,7 @@ qc_long <- QC_summary |>
   )
 
 
-p = ggplot(qc_long, aes(x = Sample, y = Cells, fill = Stage)) +
+p = ggplot(qc_long, aes(x = status, y = Cells, fill = Stage)) +
   geom_bar(stat = "identity", position = "dodge") +
   scale_fill_manual(
     values = c(
@@ -159,8 +174,11 @@ p = ggplot(qc_long, aes(x = Sample, y = Cells, fill = Stage)) +
     x = ""
   ) +
   plot_theme(x.ang = 45) 
-savefig(fig = p, filename = file.path(outdir, "plots/barplot_qc"),  width = 4, height = 3, format = "png")
 
+p
+
+savefig(fig = p, filename = file.path(outdir, "plots/barplot_qc"),  width = 4, height = 3, format = "png")
+savetbl(p@data, file = file.path(outdir, "data/barplot_qc"), format = "xlsx")
 
 ggplot(QC_summary, aes(x = Sample, y = Removed_Pct)) +
   geom_col(fill = "#E15759", width = 0.7) +
@@ -177,7 +195,64 @@ ggplot(QC_summary, aes(x = Sample, y = Removed_Pct)) +
 ```
 
 
-# umap annotation levels
+## Markers
+
+```{r fig.width=6, fig.height=10}
+
+sub = get_subset(sobj = obj, group.by = "ann1", idents = "Neuron")
+cellmap(sub, group.by = "ann3")
+sub <- genefilter(sub)
+markers <- cellmarker(sub,  group.by = "ann3", only.pos = T, logfc.threshold = 0.25, min.pct = 0.25)
+write.table(markers, file.path(outdir, "data/neuron_markers.tsv"), sep = "\t", row.names = F, quote = F)
+obj@misc$neuron_markers <- markers
+markers <- read.delim(file.path(outdir, "data/neuron_markers.tsv"))
+top <- markers %>% group_by(cluster) %>% top_n(n = 3, wt = avg_log2FC)
+p = celldot(sub, features = rev(top$gene), flip = T, group.by = "ann3", txtsize = 10, x.ang = 45, title = "Neurons", th.cols = "RdYlBu", rev.th.cols = T) 
+p
+savefig(p, filename = file.path(outdir, "plots/neuron_markers"),  width = 6, height = 10, format = "png")
+
+```
+
+## RGC
+
+```{r fig.width=4.5, fig.height=7}
+
+sub = get_subset(sobj = obj, group.by = "ann1", idents = c("RGC","Ependymal","Oligodendrocyte","Astrocyte","IPC","Tanycyte","TSC","NCC"))
+cellmap(sub, group.by = "ann3")
+sub <- genefilter(sub)
+markers <- cellmarker(sub,  group.by = "ann3", only.pos = T, logfc.threshold = 0.25, min.pct = 0.25)
+write.table(markers, file.path(outdir, "data/rgc_markers.tsv"), sep = "\t", row.names = F, quote = F)
+obj@misc$rgc_markers <- markers
+markers <- read.delim(file.path(outdir, "data/rgc_markers.tsv"))
+top <- markers %>% group_by(cluster) %>% top_n(n = 3, wt = avg_log2FC)
+p = celldot(sub, features = rev(top$gene), flip = T, group.by = "ann3", txtsize = 10, x.ang = 45, title = "RGCs", th.cols = "RdYlBu", rev.th.cols = T) 
+p
+savefig(p, filename = file.path(outdir, "plots/rgc_markers"),  width = 4.5, height = 7, format = "png")
+
+```
+
+
+## Vascular+Immune+Pitutary+Myogenic
+
+```{r fig.width=4, fig.height=5}
+
+sub = get_subset(sobj = obj, group.by = "ann1", idents = c("Mesenchyme","Vascular","Pituitary","Myogenic","Immune"))
+cellmap(sub, group.by = "ann3")
+sub <- genefilter(sub)
+markers <- cellmarker(sub,  group.by = "ann3", only.pos = T, logfc.threshold = 0.25, min.pct = 0.25)
+write.table(markers, file.path(outdir, "data/mes_vasc_pit_myog_imm_markers.tsv"), sep = "\t", row.names = F, quote = F)
+obj@misc$mes_vasc_pit_myog_imm_markers <- markers
+markers <- read.delim(file.path(outdir, "data/mes_vasc_pit_myog_imm_markers.tsv"))
+top <- markers %>% group_by(cluster) %>% top_n(n = 3, wt = avg_log2FC)
+p = celldot(sub, features = rev(top$gene), flip = T, group.by = "ann3", txtsize = 10, x.ang = 45, title = "Mes-Vasc-Pit-Myog-Imm", th.cols = "RdYlBu", rev.th.cols = T) 
+p
+savefig(p, filename = file.path(outdir, "plots/mes_vasc_pit_myog_imm_markers"),  width = 4, height = 5, format = "png")
+
+```
+
+
+
+# umap annlevels
 
 ```{r }
 
@@ -236,6 +311,18 @@ savefig(fig = p, filename = file.path(outdir, "plots/umap_bmi"),  width = 5, hei
 
 ```
 
+
+```{r fig.width=12, fig.height=5, warning=F, message=F}
+
+p <- cellmap(object = obj, group.by = "status", split.by = "status", label= F, figplot = F, plot.ttl = NULL,
+              legend = F, cols = pal$status, txtsize = 20, pt.size = 0.5, ncol = 4, axes = F, style = "dirty") 
+p
+savefig(fig = p, filename = file.path(outdir, "plots/umap_split_status"),  width = 12, height = 5, format = "png")
+
+```
+
+
+
 # Cell correlation
 
 ```{r fig.width=8, fig.height=7}
@@ -258,17 +345,14 @@ cellvio(obj, c("GH1","POMC","HESX1","LHX3", "POU1F1","TBX19"), group.by = "ann3"
 
 ```{r}
 cellstats(object = obj, ident = "status", group.by = c("sex"), rm.pct = T)
-```
 
-
-```{r fig.width=12, fig.height=5, warning=F, message=F}
-
-p <- cellmap(object = obj, group.by = "status", split.by = "status", label= F, figplot = F, plot.ttl = NULL,
-              legend = F, cols = pal$status, txtsize = 20, pt.size = 0.5, ncol = 4, axes = F, style = "dirty") 
-p
-savefig(fig = p, filename = file.path(outdir, "plots/umap_split_status"),  width = 12, height = 5, format = "png")
+p = cellstats(object = obj, ident = "ann3", group.by = c("status", "sex"), rm.pct = T)
+savetbl(df = p, file = file.path(outdir, "data/cellstats"), format = "xlsx")
 
 ```
+
+
+
 
 
 
@@ -296,38 +380,27 @@ savefig(fig = p, filename = file.path(outdir, "plots/sankey"),  width = 12, heig
 
 # Cell proportions
 
-```{r fig.width=8, fig.height=3}
-
-p = cellprop(data = obj, x = "ann3", y = "sample", stack = T, prop = T, x.title = "", x.ang = 45, colors = pal$sample)
-p
-savefig(p, filename = file.path(outdir, "plots/cellprop_sample_ann3"),  width = 8, height = 3, format = "png")
-
-p = cellprop(data = obj, x = "ann3", y = "group", stack = T, prop = T, x.title = "", x.ang = 45, colors = pal$group)
-p
-savefig(p, filename = file.path(outdir, "plots/cellprop_group_ann3"),  width = 8, height = 3, format = "png")
-
-p = cellprop(data = obj, x = "ann3", y = "cond", stack = T, prop = T, x.title = "", x.ang = 45, colors = pal$cond)
-p
-savefig(p, filename = file.path(outdir, "plots/cellprop_cond_ann3"),  width = 8, height = 3, format = "png")
-
-```
-
-
 ```{r fig.width=4, fig.height=6}
 
-p = cellprop(data = obj, x = "ann3", y = "group", stack = T, prop = T, coord.flip = T, x.title = "",x.ang = 0,  show.contour = F,x.reverse = T, colors = pal$group)
+p = cellprop(data = obj, x = "ann3", y = "sample", stack = T, prop = T, flip = T, x.ttl = "", x.ang = 0, cols = pal$sample, contour = F)
 p
-savefig(p, filename = file.path(outdir, "plots/cellprop_group_ann3"),  width = 4, height = 6, format = "png")
+savefig(p, filename = file.path(outdir, "plots/cellprop_sample_ann3"),  width = 4, height = 6, format = "png")
 
-p = cellprop(data = obj, x = "ann3", y = "bmi", stack = T, prop = T, coord.flip = T, x.title = "",x.ang = 0,  show.contour = F,x.reverse = T, colors = pal$bmi)
+p = cellprop(data = obj, x = "ann3", y = "bmi", stack = T, prop = T, flip = T, x.ttl = "", x.ang = 0, cols = pal$bmi, contour = F)
 p
 savefig(p, filename = file.path(outdir, "plots/cellprop_bmi_ann3"),  width = 4, height = 6, format = "png")
 
-p = cellprop(data = obj, x = "ann3", y = "stage", stack = T, prop = T, coord.flip = T, x.title = "",x.ang = 0, show.contour = F, x.reverse = T, colors = pal$stage)
+
+p = cellprop(data = obj, x = "ann3", y = "group", stack = T, prop = T, flip = T, x.ttl = "", x.ang = 0, cols = pal$group, contour = F)
+p
+savefig(p, filename = file.path(outdir, "plots/cellprop_group_ann3"),  width = 4, height = 6, format = "png")
+
+p = cellprop(data = obj, x = "ann3", y = "stage", stack = T, prop = T, flip = T, x.ttl = "", x.ang = 0, cols = pal$stage, contour = F)
 p
 savefig(p, filename = file.path(outdir, "plots/cellprop_stage_ann3"),  width = 4, height = 6, format = "png")
 
 ```
+
 
 
 ```{r fig.width=3, fig.height=3}
@@ -343,17 +416,39 @@ savefig(p, filename = file.path(outdir, "plots/cellprop_tbx3_pomc_agrp_kiss1"), 
 
 # scPermutation testing
 
+
+
 ```{r fig.width=5, fig.height=8}
 
 Idents(obj) <- "ann3"
 prop_test <- scProportionTest::sc_utils(obj)
-prop_test <- scProportionTest::permutation_test(prop_test, cluster_identity = "ann3", sample_1 = "N10-12", sample_2 = "O10-12", sample_identity = "group", n_permutations = 10000)
+prop_test <- scProportionTest::permutation_test(prop_test, cluster_identity = "ann3", sample_1 = "LD10-12", sample_2 = "OD10-12", sample_identity = "group", n_permutations = 10000)
 
-savetbl(prop_test@results, file = file.path(outdir, "data/permut_test"), format = "tsv")
+savetbl(prop_test@results, file = file.path(outdir, "data/permut_test"), format = "xlsx")
 
-p <- permut_plot(prop_test, leg.pos = "bottom", plot.ttl = "scPermut test O10-12 vs N10-12")
+p <- cellpermut(
+  df = prop_test@results,
+  mode = "log2FD",
+  cluster.col = "clusters",
+  group.cols = c("LD10-12","OD10-12"),
+  plot.ttl = "scPermut test OD10-12 vs LD10-12",
+  style = "bw", leg.pos = "bottom"
+)
+
 p
 savefig(p, filename = file.path(outdir, "plots/permut_test"),  width = 5, height = 8)
+
+
+# p <- cellpermut(
+#   df = prop_test@results,
+#   mode = "prop",
+#   cluster.col = "clusters",
+#   group.cols = c("LD10.12","OD10.12"),
+#   plot.ttl = "scPermut test OD10-12 vs LD10-12",
+#   style = "bw",
+#   leg.pos = "bottom"
+# )
+# p
 
 ```
 
@@ -378,7 +473,7 @@ p <- celldot(obj, features = c("TBX3", "SIX3", "SHH", "RAX", "NKX2-1", "PRDM12",
                                 "ISL1", "ASCL1", "OTP", "POMC", "KISS1","NPY", "AGRP"),
              group.by = "ann3", x.ang = 45, flip = F)
 p
-savefig(p, filename = file.path(outdir, "plots/celldot_candidate_genes"),  width = 5, height = 8)
+savefig(p, filename = file.path(outdir, "plots/fig4b"),  width = 5, height = 8)
 
 ```
 
@@ -388,8 +483,8 @@ savefig(p, filename = file.path(outdir, "plots/celldot_candidate_genes"),  width
 
 ```{r fig.width=5, fig.height=4}
 
-p = cellmark(obj, group.by = "ann3", cluster.names = c("TBX3","POMC","AGRP","KISS1"), mode = "multi",
-             custom.colors = pal$ann3, legend.position = c(0.8,0.05), axes = F, highlight.size = 0.1)
+p = cellmark(obj, group.by = "ann3", idents = c("TBX3","POMC","AGRP","KISS1"), mode = "multi",
+             cols = pal$ann3, leg.pos = c(0.8,0.05), axes = F, mark.pt.size = 0.1)
 p
 savefig(p, filename = file.path(outdir, "plots/cellmark"),  width = 5, height = 4, format = "png")
 
@@ -405,24 +500,31 @@ p
 savefig(p, filename = file.path(outdir, "plots/cellfeat_pomc_tbx3"), width = 7, height = 4, format = "png")
 
 ```
+
 ```{r fig.width=6, fig.height=8}
 celldot(obj, group.by = "ann3", features = c("TBX3","PITX2","RBFOX3","GAD1", "GAD2","SLC32A1","SLC17A7","SIM1","OTX2","NEUROD1", "NEUROD6"),txtsize = 8)
 ```
 
 # cell counts
 
+
+
 ```{r fig.width=4, fig.height=3}
 
-sub <- get_subset(obj, group.by = "ann3", idents=c("POMC", "TBX3", "AGRP","KISS1"))
-p = cellprop(sub, x="ann3", y="bmi", colors = pal$bmi, x.ang = 45, txtsize = 12, x.title = "")
+p = cellprop(sub, x="ann3", y="group", prop = T, stack = T, cols = pal$group, x.ang = 45, txtsize = 12, x.ttl = "")
 p
-savefig(p, filename = file.path(outdir, "plots/cellprop_bmi_pomc_tbx3_kiss1_agrp"), width = 4, height = 3)
-
-p = cellprop(sub, x="ann3", y="group", colors = pal$group, x.ang = 0, txtsize = 12, x.title = "")
-p
-savefig(p, filename = file.path(outdir, "plots/cellprop_group_pomc_tbx3"), width = 3, height = 3)
+savefig(p, filename = file.path(outdir, "plots/fig3c"), width = 3, height = 4)
 
 ```
+
+```{r fig.width=4, fig.height=3}
+sub <- get_subset(obj, group.by = "ann3", idents=c("POMC", "TBX3", "AGRP","KISS1"))
+p = cellprop(sub, x="ann3", y="bmi", cols = pal$bmi, x.ang = 45, txtsize = 12, x.ttl = "", )
+p
+savefig(p, filename = file.path(outdir, "plots/fig3d"), width = 4, height = 3)
+```
+
+
 
 # Highlight candidate cell types
 
@@ -464,11 +566,12 @@ sub = cellslice(obj, group.by = "ann3", idents = c("TBX3", "KISS1", "AGRP", "NPY
 sub$cellgroup <- paste(sub$ann3, sub$group, sep = "_")
 
 p = cellmap(sub, group.by = "ann3", style = "classic", axes=F, cols=pal$ann3)
-savefig(fig = p, filename = file.path(outdir, "plots/cellgroup"),  width = 5, height = 4)
+p
+savefig(fig = p, filename = file.path(outdir, "plots/fig4c"),  width = 5, height = 4)
 
 p = celldot(sub, group.by = "cellgroup", features = candidate_genes, x.ang = 45, flip = T, th.cols = "RdYlBu", rev.th.cols = T)
 p
-savefig(fig = p, filename = file.path(outdir, "plots/celldot_cellgroup_candidate_genes"),  width = 7, height = 5)
+savefig(fig = p, filename = file.path(outdir, "plots/fig4d"),  width = 7, height = 5)
 
 ```
 
@@ -529,64 +632,6 @@ p = cellvio(sub, group.by = "group", features = c("TBX3", "SIX3", "SHH", "RAX", 
 p
 savefig(p, filename = file.path(outdir, "plots/cellvio_agrp"), width = 6, height = 8, format = "png")
 
-```
-
-# Co-expression
-
-
-```{r}
-
-clusters <- c("POMC", "TBX3", "AGRP", "KISS1")
-
-for (cl in clusters) {
-
-  message("Processing cluster: ", cl)
-
-  # subset
-  sub <- cellslice(
-    obj,
-    group.by = "ann3",
-    idents = cl,
-    preprocess = 
-  )
-
-  ## ---- cellmap ----
-  p_map <- cellmap(
-    sub,
-    group.by = "ann3",
-    cols = pal$ann3,
-    style = "classic",
-    axes = FALSE,
-    leg.ttl = ""
-  )
-
-  savefig(
-    p_map,
-    filename = file.path(outdir, paste0("plots/cellmap_", cl)),
-    width = 5,
-    height = 3,
-    format = "png"
-  )
-
-  ## ---- co-expression ----
-  features <- c("TBX3", "POMC", "AGRP", "KISS1")
-
-  p_coexp <- cellcoexp(
-    sub,
-    features = features,
-    pt.size = 2,
-    axes = FALSE,
-    figplot = FALSE
-  )
-
-  savefig(
-    p_coexp,
-    filename = file.path(outdir, paste0("plots/coexpr_", cl)),
-    width = 5,
-    height = 3,
-    format = "png"
-  )
-}
 ```
 
 
